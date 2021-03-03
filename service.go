@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"time"
@@ -73,6 +74,8 @@ func NewService(network, address string) (*Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listen [%s %s]: %w", network, address, err)
 	}
+	log.Printf("opened http listener at %s %s", l.Addr().Network(), l.Addr().String())
+
 	s := &Service{
 		listener: l,
 		provider: compose.Compose(

@@ -1,0 +1,12 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: auth-demo
+spec:
+  containers:
+    - name: auth-demo
+      image: auth-demo:latest
+      imagePullPolicy: Never
+      ports:
+        - containerPort: 8000
+          name: "http-server"
