@@ -17,6 +17,8 @@ var (
 )
 
 func main() {
+	env.ParseFlags()
+
 	s, err := authdemo.NewService(listenNetwork.Get(), listenAddress.Get())
 	if err != nil {
 		log.Fatal(err)
