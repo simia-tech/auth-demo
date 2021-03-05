@@ -15,16 +15,13 @@ import (
 	"github.com/ory/fosite/handler/oauth2"
 	"github.com/ory/fosite/storage"
 	"github.com/ory/fosite/token/hmac"
-	"gopkg.in/square/go-jose.v2"
+	"github.com/ory/fosite/token/jwt"
+	"github.com/simia-tech/env"
 )
 
-var hmacStrategy = &oauth2.HMACSHAStrategy{
-	Enigma: &hmac.HMACStrategy{
-		GlobalSecret: []byte("global-validation-key-0123456789"),
-	},
-	AccessTokenLifespan:   time.Hour,
-	AuthorizeCodeLifespan: time.Minute,
-}
+var (
+	hmacKey = env.Bytes("HMAC_KEY", []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
+)
 
 // Service implements the authentication service.
 type Service struct {
@@ -34,7 +31,7 @@ type Service struct {
 
 // NewService returns an initialized service that listens to the provided network and address.
 func NewService(network, address string) (*Service, error) {
-	issuerKeyPair, err := rsa.GenerateKey(rand.Reader, 2048)
+	issuerPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, fmt.Errorf("generate key pair: %w", err)
 	}
@@ -48,26 +45,20 @@ func NewService(network, address string) (*Service, error) {
 			Scopes:     []string{"fosite"},
 		},
 	}
-	store.IssuerPublicKeys = map[string]storage.IssuerPublicKeys{
-		"issuer@auth-demo.com": {
-			Issuer: "issuer@auth-demo.com",
-			KeysBySub: map[string]storage.SubjectPublicKeys{
-				"auth-demo": {
-					Subject: "auth-demo",
-					Keys: map[string]storage.PublicKeyScopes{
-						"123": {
-							Key: &jose.JSONWebKey{
-								Key:       issuerKeyPair.Public(),
-								Algorithm: string(jose.RS256),
-								Use:       "sig",
-								KeyID:     "123",
-							},
-							Scopes: []string{"fosite"},
-						},
-					},
-				},
-			},
+
+	hmacStrategy := &oauth2.HMACSHAStrategy{
+		Enigma: &hmac.HMACStrategy{
+			GlobalSecret: hmacKey.Get(),
 		},
+		AccessTokenLifespan:   time.Hour,
+		AuthorizeCodeLifespan: time.Minute,
+	}
+
+	jwtStrategy := &oauth2.DefaultJWTStrategy{
+		JWTStrategy: &jwt.RS256JWTStrategy{
+			PrivateKey: issuerPrivateKey,
+		},
+		HMACSHAStrategy: hmacStrategy,
 	}
 
 	l, err := net.Listen(network, address)
@@ -81,7 +72,7 @@ func NewService(network, address string) (*Service, error) {
 		provider: compose.Compose(
 			&compose.Config{},
 			store,
-			hmacStrategy,
+			jwtStrategy,
 			nil,
 			compose.OAuth2ClientCredentialsGrantFactory,
 			compose.OAuth2TokenIntrospectionFactory,
